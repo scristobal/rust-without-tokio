@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
-use std::future::Future;
+use std::future::{Future, poll_fn};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Wake, Waker};
+use std::task::{Context, Poll, Wake, Waker};
 
 struct Task {
     future: Mutex<Pin<Box<dyn Future<Output = ()> + Send>>>,
@@ -54,13 +54,13 @@ impl Executor {
 
 pub fn yield_now() -> impl Future<Output = ()> {
     let mut yielded = false;
-    std::future::poll_fn(move |cx| {
+    poll_fn(move |cx| {
         if yielded {
-            std::task::Poll::Ready(())
+            Poll::Ready(())
         } else {
             yielded = true;
             cx.waker().wake_by_ref();
-            std::task::Poll::Pending
+            Poll::Pending
         }
     })
 }
