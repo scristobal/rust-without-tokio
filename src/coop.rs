@@ -15,7 +15,11 @@ struct SimpleWaker {
 
 impl Wake for SimpleWaker {
     fn wake(self: Arc<Self>) {
-        self.executor.queue.lock().unwrap().push_back(self.task.clone());
+        self.executor
+            .queue
+            .lock()
+            .unwrap()
+            .push_back(self.task.clone());
     }
 }
 

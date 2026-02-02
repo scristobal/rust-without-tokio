@@ -1,4 +1,4 @@
-use rust_simple_executor::coop::{yield_now, Executor};
+use rust_simple_executor::coop::{Executor, yield_now};
 
 async fn compute() -> i32 {
     let a = async { 10 }.await;
