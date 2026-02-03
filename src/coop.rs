@@ -8,6 +8,11 @@ struct Task {
     future: Mutex<Pin<Box<dyn Future<Output = ()> + Send>>>,
 }
 
+#[derive(Clone)]
+pub struct Executor {
+    queue: Arc<Mutex<VecDeque<Arc<Task>>>>,
+}
+
 struct SimpleWaker {
     task: Arc<Task>,
     executor: Executor,
@@ -15,17 +20,20 @@ struct SimpleWaker {
 
 impl Wake for SimpleWaker {
     fn wake(self: Arc<Self>) {
-        self.executor
-            .queue
-            .lock()
-            .unwrap()
-            .push_back(self.task.clone());
+        self.executor.schedule(self.task.clone());
     }
 }
 
-#[derive(Clone)]
-pub struct Executor {
-    queue: Arc<Mutex<VecDeque<Arc<Task>>>>,
+impl Task {
+    fn new(future: impl Future<Output = ()> + Send + 'static) -> Arc<Self> {
+        Arc::new(Task {
+            future: Mutex::new(Box::pin(future)),
+        })
+    }
+
+    fn poll(&self, cx: &mut Context) -> Poll<()> {
+        self.future.lock().unwrap().as_mut().poll(cx)
+    }
 }
 
 impl Executor {
@@ -35,23 +43,28 @@ impl Executor {
         }
     }
 
+    fn schedule(&self, task: Arc<Task>) {
+        self.queue.lock().unwrap().push_back(task);
+    }
+
+    fn unschedule(&self) -> Option<Arc<Task>> {
+        self.queue.lock().unwrap().pop_front()
+    }
+
     pub fn spawn(&self, future: impl Future<Output = ()> + Send + 'static) {
-        self.queue.lock().unwrap().push_back(Arc::new(Task {
-            future: Mutex::new(Box::pin(future)),
-        }));
+        self.schedule(Task::new(future));
     }
 
     pub fn run(&self) {
         loop {
-            let task = self.queue.lock().unwrap().pop_front();
-            let Some(task) = task else { break };
+            let Some(task) = self.unschedule() else { break };
 
             let waker = Waker::from(Arc::new(SimpleWaker {
                 task: task.clone(),
                 executor: self.clone(),
             }));
             let mut cx = Context::from_waker(&waker);
-            let _ = task.future.lock().unwrap().as_mut().poll(&mut cx);
+            let _ = task.poll(&mut cx);
         }
     }
 }
