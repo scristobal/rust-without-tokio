@@ -1,4 +1,5 @@
 Rust simple executor(s)
 
-- cooperative schedule for async tasks, think of coroutines
-- single future polling until completion
+- yield scheduler for async tasks, think of coroutines
+- thread scheduler for blocking work
+- block on a single future until completion
